@@ -108,7 +108,7 @@ Circuit runs at **5V**, the safe supply voltage for the Atmega168. A transistor 
 
 ---
 
-## 📚 References
+##  References
 
 1. [CD4049UB Datasheet — TI](https://www.ti.com/lit/ds/symlink/cd4049ub.pdf)
 2. [ATmega88/ATmega168 Datasheet — Microchip](https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-9365-Automotive-Microcontrollers-ATmega88-ATmega168_Datasheet.pdf)
