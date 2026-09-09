@@ -20,9 +20,6 @@ The detector runs on electromagnetic induction. Two coils — a transmitter and 
 Power Supply → Oscillator/Detector Circuit (Coils L1, L2) → Amplifier → Speaker
 ```
 
-## Circuit schematic
-
-![Metal detector schematic](images/schematic.png)
 
 ## Key calculations
 
@@ -79,6 +76,3 @@ Coils were hand-wound using 25 AWG (0.45 mm) copper wire, ~6.69 cm diameter, 2.4
 - [ON Semiconductor — P2N2222A datasheet](https://www.onsemi.com/pdf/datasheet/p2n2222a-d.pdf)
 - [ON Semiconductor — SS8550 datasheet](https://www.onsemi.com/pdf/datasheet/ss8550-d.pdf)
 
-## Author
-
-Natia Kandelaki — 2nd year student, Faculty of Engineering and Technology, Georgian Agrarian University, 2024
