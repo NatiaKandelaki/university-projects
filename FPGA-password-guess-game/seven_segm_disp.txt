@@ -1,0 +1,75 @@
+----------------------------------------------------------------------------------
+-- Module Name:    seven_segm_disp - Behavioral
+-- Target:         Digilent Anvyl, 100 MHz clock
+--
+----------------------------------------------------------------------------------
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity seven_segm_disp is
+    Port (
+        clk       : in  STD_LOGIC;
+        disp_data : in  STD_LOGIC_VECTOR(23 downto 0);
+        an        : out STD_LOGIC_VECTOR(5 downto 0);
+        seg       : out STD_LOGIC_VECTOR(6 downto 0)
+    );
+end seven_segm_disp;
+
+architecture Behavioral of seven_segm_disp is
+
+    component decoder
+        Port (
+            num : in  STD_LOGIC_VECTOR(3 downto 0);
+            seg : out STD_LOGIC_VECTOR(6 downto 0)
+        );
+    end component;
+
+    signal clkdiv : UNSIGNED(17 downto 0) := (others => '0');
+    signal clk190 : STD_LOGIC_VECTOR(2 downto 0);
+    signal digit  : STD_LOGIC_VECTOR(3 downto 0);
+
+begin
+
+    uut : decoder port map (
+        num => digit,
+        seg => seg
+    );
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            clkdiv <= clkdiv + 1;
+        end if;
+    end process;
+
+    clk190 <= STD_LOGIC_VECTOR(clkdiv(17 downto 15));
+
+    process(clk190)
+    begin
+        an <= "000000";
+        case clk190 is
+            when "000" => an(0) <= '1';
+            when "001" => an(1) <= '1';
+            when "010" => an(2) <= '1';
+            when "011" => an(3) <= '1';
+            when "100" => an(4) <= '1';
+            when "101" => an(5) <= '1';
+            when others => an <= "000000";
+        end case;
+    end process;
+
+    process(clk190, disp_data)
+    begin
+        case clk190 is
+            when "000" => digit <= disp_data( 3 downto  0);
+            when "001" => digit <= disp_data( 7 downto  4);
+            when "010" => digit <= disp_data(11 downto  8);
+            when "011" => digit <= disp_data(15 downto 12);
+            when "100" => digit <= disp_data(19 downto 16);
+            when "101" => digit <= disp_data(23 downto 20);
+            when others => digit <= "1111";
+        end case;
+    end process;
+
+end Behavioral;

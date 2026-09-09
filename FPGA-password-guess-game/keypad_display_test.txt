@@ -1,0 +1,393 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+
+
+entity keypad_display_test is
+    Port (
+        clk      : in  STD_LOGIC;
+        rst      : in  STD_LOGIC;
+        col_out  : out STD_LOGIC_VECTOR(3 downto 0);
+        row_in   : in  STD_LOGIC_VECTOR(3 downto 0);
+        an       : out STD_LOGIC_VECTOR(5 downto 0);
+        seg      : out STD_LOGIC_VECTOR(6 downto 0);
+        led      : out STD_LOGIC_VECTOR(4 downto 0);
+        tft_clk  : out STD_LOGIC;
+        tft_de   : out STD_LOGIC;
+        tft_hs   : out STD_LOGIC;
+        tft_vs   : out STD_LOGIC;
+        tft_disp : out STD_LOGIC;
+        tft_bklt : out STD_LOGIC;
+        tft_vdden: out STD_LOGIC;
+        tft_r    : out STD_LOGIC_VECTOR(7 downto 0);
+        tft_g    : out STD_LOGIC_VECTOR(7 downto 0);
+        tft_b    : out STD_LOGIC_VECTOR(7 downto 0);
+        tp_cs    : out STD_LOGIC;
+        tp_dclk  : out STD_LOGIC;
+        tp_din   : out STD_LOGIC
+    );
+end keypad_display_test;
+
+architecture Behavioral of keypad_display_test is
+
+    component keypad_scanner
+        Port (
+            clk       : in  STD_LOGIC;
+            rst       : in  STD_LOGIC;
+            col_out   : out STD_LOGIC_VECTOR(3 downto 0);
+            row_in    : in  STD_LOGIC_VECTOR(3 downto 0);
+            key_code  : out STD_LOGIC_VECTOR(3 downto 0);
+            key_valid : out STD_LOGIC
+        );
+    end component;
+
+    component seven_segm_disp
+        Port (
+            clk       : in  STD_LOGIC;
+            disp_data : in  STD_LOGIC_VECTOR(23 downto 0);
+            an        : out STD_LOGIC_VECTOR(5 downto 0);
+            seg       : out STD_LOGIC_VECTOR(6 downto 0)
+        );
+    end component;
+
+    component tft_display
+        Port (
+            clk_100   : in  STD_LOGIC;
+            rst       : in  STD_LOGIC;
+            game_won  : in  STD_LOGIC;
+            game_lost : in  STD_LOGIC;
+            tft_clk   : out STD_LOGIC;
+            tft_de    : out STD_LOGIC;
+            tft_hs    : out STD_LOGIC;
+            tft_vs    : out STD_LOGIC;
+            tft_disp  : out STD_LOGIC;
+            tft_bklt  : out STD_LOGIC;
+            tft_vdden : out STD_LOGIC;
+            tft_r     : out STD_LOGIC_VECTOR(7 downto 0);
+            tft_g     : out STD_LOGIC_VECTOR(7 downto 0);
+            tft_b     : out STD_LOGIC_VECTOR(7 downto 0)
+        );
+    end component;
+
+    constant DASH : STD_LOGIC_VECTOR(3 downto 0) := x"F";
+
+    constant FLICK_HALF : integer := 40_000_000;
+    constant FLICK_REPS : integer := 4;
+
+    signal key_code  : STD_LOGIC_VECTOR(3 downto 0);
+    signal key_valid : STD_LOGIC;
+
+    signal disp_data    : STD_LOGIC_VECTOR(23 downto 0) := x"FFFFFF";
+    signal settled_data : STD_LOGIC_VECTOR(23 downto 0) := x"FFFFFF";
+    signal guess_data   : STD_LOGIC_VECTOR(23 downto 0) := x"FFFFFF";
+    signal passcode     : STD_LOGIC_VECTOR(23 downto 0) := x"FFFFFF";
+
+    signal entry_phase : STD_LOGIC := '0';
+    signal digit_count : integer range 0 to 6 := 0;
+
+    signal locked : STD_LOGIC_VECTOR(5 downto 0) := "000000";
+
+    signal cursor : integer range 0 to 6 := 0;
+
+    signal lives     : integer range 0 to 5 := 5;
+    signal game_won  : STD_LOGIC := '0';
+    signal game_lost : STD_LOGIC := '0';
+
+    type flick_state_t is (IDLE, FLICK_ON, FLICK_OFF);
+    signal flick_state : flick_state_t := IDLE;
+    signal flick_cnt   : integer range 0 to FLICK_HALF := 0;
+    signal flick_rep   : integer range 0 to FLICK_REPS := 0;
+    signal flick_mask  : STD_LOGIC_VECTOR(5 downto 0) := "000000";
+
+begin
+
+    tp_cs   <= '1';
+    tp_dclk <= '0';
+    tp_din  <= '0';
+
+    u_keypad : keypad_scanner
+        port map (clk=>clk, rst=>rst, col_out=>col_out,
+                  row_in=>row_in, key_code=>key_code, key_valid=>key_valid);
+
+    u_display : seven_segm_disp
+        port map (clk=>clk, disp_data=>disp_data, an=>an, seg=>seg);
+
+    u_tft : tft_display
+        port map (
+            clk_100=>clk, rst=>rst,
+            game_won=>game_won, game_lost=>game_lost,
+            tft_clk=>tft_clk, tft_de=>tft_de,
+            tft_hs=>tft_hs,   tft_vs=>tft_vs,
+            tft_disp=>tft_disp, tft_bklt=>tft_bklt,
+            tft_vdden=>tft_vdden,
+            tft_r=>tft_r, tft_g=>tft_g, tft_b=>tft_b);
+
+    led <= "00000" when lives = 0 else
+           "00001" when lives = 1 else
+           "00011" when lives = 2 else
+           "00111" when lives = 3 else
+           "01111" when lives = 4 else
+           "11111";
+
+    process(clk)
+        variable any_wrong   : STD_LOGIC;
+        variable c_mask      : STD_LOGIC_VECTOR(5 downto 0);
+        variable new_locked  : STD_LOGIC_VECTOR(5 downto 0);
+        variable result      : STD_LOGIC_VECTOR(23 downto 0);
+        variable next_cursor : integer range 0 to 6;
+        variable pass_nibble : STD_LOGIC_VECTOR(3 downto 0);
+        variable found       : STD_LOGIC;
+    begin
+        if rising_edge(clk) then
+            if rst = '1' then
+                disp_data    <= x"FFFFFF";
+                settled_data <= x"FFFFFF";
+                guess_data   <= x"FFFFFF";
+                passcode     <= x"FFFFFF";
+                entry_phase  <= '0';
+                digit_count  <= 0;
+                locked       <= "000000";
+                cursor       <= 0;
+                lives        <= 5;
+                game_won     <= '0';
+                game_lost    <= '0';
+                flick_state  <= IDLE;
+                flick_cnt    <= 0;
+                flick_rep    <= 0;
+                flick_mask   <= "000000";
+
+            else
+
+
+                case flick_state is
+
+                    when FLICK_ON =>
+                        if flick_cnt < FLICK_HALF - 1 then
+                            flick_cnt <= flick_cnt + 1;
+                        else
+                            flick_cnt <= 0;
+                            result := settled_data;
+                            if flick_mask(5) = '1' then result(23 downto 20) := DASH; end if;
+                            if flick_mask(4) = '1' then result(19 downto 16) := DASH; end if;
+                            if flick_mask(3) = '1' then result(15 downto 12) := DASH; end if;
+                            if flick_mask(2) = '1' then result(11 downto  8) := DASH; end if;
+                            if flick_mask(1) = '1' then result( 7 downto  4) := DASH; end if;
+                            if flick_mask(0) = '1' then result( 3 downto  0) := DASH; end if;
+                            disp_data   <= result;
+                            flick_state <= FLICK_OFF;
+                        end if;
+
+                    when FLICK_OFF =>
+                        if flick_cnt < FLICK_HALF - 1 then
+                            flick_cnt <= flick_cnt + 1;
+                        else
+                            flick_cnt <= 0;
+                            disp_data <= settled_data;
+                            if flick_rep < FLICK_REPS - 1 then
+                                flick_rep   <= flick_rep + 1;
+                                flick_state <= FLICK_ON;
+                            else
+                                flick_rep   <= 0;
+                                flick_state <= IDLE;
+                                -- Build base display for next round:
+                                -- locked slots show digit, unlocked show dash
+                                result := x"FFFFFF";
+                                if locked(5) = '1' then result(23 downto 20) := passcode(23 downto 20); end if;
+                                if locked(4) = '1' then result(19 downto 16) := passcode(19 downto 16); end if;
+                                if locked(3) = '1' then result(15 downto 12) := passcode(15 downto 12); end if;
+                                if locked(2) = '1' then result(11 downto  8) := passcode(11 downto  8); end if;
+                                if locked(1) = '1' then result( 7 downto  4) := passcode( 7 downto  4); end if;
+                                if locked(0) = '1' then result( 3 downto  0) := passcode( 3 downto  0); end if;
+                                disp_data  <= result;
+                                guess_data <= result;
+                                -- Cursor to first unlocked slot (left to right)
+                                next_cursor := 6;
+                                found := '0';
+                                if locked(5) = '0' and found = '0' then next_cursor := 0; found := '1'; end if;
+                                if locked(4) = '0' and found = '0' then next_cursor := 1; found := '1'; end if;
+                                if locked(3) = '0' and found = '0' then next_cursor := 2; found := '1'; end if;
+                                if locked(2) = '0' and found = '0' then next_cursor := 3; found := '1'; end if;
+                                if locked(1) = '0' and found = '0' then next_cursor := 4; found := '1'; end if;
+                                if locked(0) = '0' and found = '0' then next_cursor := 5; found := '1'; end if;
+                                cursor <= next_cursor;
+                            end if;
+                        end if;
+
+                    when others => null;
+                end case;
+
+
+                if key_valid = '1' and flick_state = IDLE then
+
+
+                    if entry_phase = '0' then
+
+                        if key_code = x"F" then
+                            disp_data   <= x"FFFFFF";
+                            digit_count <= 0;
+
+                        elsif key_code = x"E" then
+                            if digit_count = 6 then
+                                passcode    <= disp_data;
+                                disp_data   <= x"FFFFFF";
+                                guess_data  <= x"FFFFFF";
+                                digit_count <= 0;
+                                entry_phase <= '1';
+                                cursor      <= 0;
+                            end if;
+
+                        elsif digit_count < 6 then
+                            case digit_count is
+                                when 0 => disp_data(23 downto 20) <= key_code;
+                                when 1 => disp_data(19 downto 16) <= key_code;
+                                when 2 => disp_data(15 downto 12) <= key_code;
+                                when 3 => disp_data(11 downto  8) <= key_code;
+                                when 4 => disp_data( 7 downto  4) <= key_code;
+                                when 5 => disp_data( 3 downto  0) <= key_code;
+                                when others => null;
+                            end case;
+                            digit_count <= digit_count + 1;
+                        end if;
+
+
+                    else
+
+                        if game_won = '1' or game_lost = '1' then
+                            null;
+
+                        elsif key_code = x"F" then
+                            -- Clear non-locked slots, keep locked digits
+                            result := x"FFFFFF";
+                            if locked(5) = '1' then result(23 downto 20) := passcode(23 downto 20); end if;
+                            if locked(4) = '1' then result(19 downto 16) := passcode(19 downto 16); end if;
+                            if locked(3) = '1' then result(15 downto 12) := passcode(15 downto 12); end if;
+                            if locked(2) = '1' then result(11 downto  8) := passcode(11 downto  8); end if;
+                            if locked(1) = '1' then result( 7 downto  4) := passcode( 7 downto  4); end if;
+                            if locked(0) = '1' then result( 3 downto  0) := passcode( 3 downto  0); end if;
+                            disp_data  <= result;
+                            guess_data <= result;
+                            -- Cursor to first unlocked slot
+                            next_cursor := 6;
+                            found := '0';
+                            if locked(5) = '0' and found = '0' then next_cursor := 0; found := '1'; end if;
+                            if locked(4) = '0' and found = '0' then next_cursor := 1; found := '1'; end if;
+                            if locked(3) = '0' and found = '0' then next_cursor := 2; found := '1'; end if;
+                            if locked(2) = '0' and found = '0' then next_cursor := 3; found := '1'; end if;
+                            if locked(1) = '0' and found = '0' then next_cursor := 4; found := '1'; end if;
+                            if locked(0) = '0' and found = '0' then next_cursor := 5; found := '1'; end if;
+                            cursor <= next_cursor;
+
+                        elsif key_code = x"E" then
+                            -- Submit only when all slots filled (cursor = 6)
+                            if cursor = 6 then
+                                any_wrong  := '0';
+                                c_mask     := "000000";
+                                result     := guess_data;
+                                new_locked := locked;
+
+                                if guess_data(23 downto 20) /= passcode(23 downto 20) then
+                                    result(23 downto 20) := DASH; any_wrong := '1';
+                                else c_mask(5) := '1'; new_locked(5) := '1'; end if;
+
+                                if guess_data(19 downto 16) /= passcode(19 downto 16) then
+                                    result(19 downto 16) := DASH; any_wrong := '1';
+                                else c_mask(4) := '1'; new_locked(4) := '1'; end if;
+
+                                if guess_data(15 downto 12) /= passcode(15 downto 12) then
+                                    result(15 downto 12) := DASH; any_wrong := '1';
+                                else c_mask(3) := '1'; new_locked(3) := '1'; end if;
+
+                                if guess_data(11 downto 8) /= passcode(11 downto 8) then
+                                    result(11 downto 8)  := DASH; any_wrong := '1';
+                                else c_mask(2) := '1'; new_locked(2) := '1'; end if;
+
+                                if guess_data(7 downto 4) /= passcode(7 downto 4) then
+                                    result(7 downto 4)   := DASH; any_wrong := '1';
+                                else c_mask(1) := '1'; new_locked(1) := '1'; end if;
+
+                                if guess_data(3 downto 0) /= passcode(3 downto 0) then
+                                    result(3 downto 0)   := DASH; any_wrong := '1';
+                                else c_mask(0) := '1'; new_locked(0) := '1'; end if;
+
+                                settled_data <= result;
+                                disp_data    <= result;
+                                locked       <= new_locked;
+
+                                if any_wrong = '0' then
+                                    game_won <= '1';
+                                elsif lives = 1 then
+                                    lives     <= 0;
+                                    game_lost <= '1';
+                                else
+                                    lives <= lives - 1;
+                                end if;
+
+                                if c_mask /= "000000" then
+                                    flick_mask  <= c_mask;
+                                    flick_cnt   <= 0;
+                                    flick_rep   <= 0;
+                                    flick_state <= FLICK_ON;
+                                else
+                                    -- Nothing correct: reset display immediately
+                                    result := x"FFFFFF";
+                                    -- new_locked is all zeros here since c_mask=0
+                                    disp_data  <= result;
+                                    guess_data <= result;
+                                    cursor     <= 0;
+                                end if;
+                            end if;
+
+                        else
+                            -- ---- Digit key pressed ----
+                            if cursor < 6 and locked(5 - cursor) = '0' then
+
+                                -- Write digit to display and guess buffer
+                                case cursor is
+                                    when 0 =>
+                                        disp_data(23 downto 20)  <= key_code;
+                                        guess_data(23 downto 20) <= key_code;
+                                        pass_nibble := passcode(23 downto 20);
+                                    when 1 =>
+                                        disp_data(19 downto 16)  <= key_code;
+                                        guess_data(19 downto 16) <= key_code;
+                                        pass_nibble := passcode(19 downto 16);
+                                    when 2 =>
+                                        disp_data(15 downto 12)  <= key_code;
+                                        guess_data(15 downto 12) <= key_code;
+                                        pass_nibble := passcode(15 downto 12);
+                                    when 3 =>
+                                        disp_data(11 downto  8)  <= key_code;
+                                        guess_data(11 downto  8) <= key_code;
+                                        pass_nibble := passcode(11 downto 8);
+                                    when 4 =>
+                                        disp_data( 7 downto  4)  <= key_code;
+                                        guess_data( 7 downto  4) <= key_code;
+                                        pass_nibble := passcode(7 downto 4);
+                                    when others =>
+                                        disp_data( 3 downto  0)  <= key_code;
+                                        guess_data( 3 downto  0) <= key_code;
+                                        pass_nibble := passcode(3 downto 0);
+                                end case;
+
+                                -- Find next unlocked slot to the right of cursor
+                                -- Use new_locked = locked since no change here
+                                next_cursor := 6;
+                                found := '0';
+                                if cursor < 1 and locked(4) = '0' and found = '0' then next_cursor := 1; found := '1'; end if;
+                                if cursor < 2 and locked(3) = '0' and found = '0' then next_cursor := 2; found := '1'; end if;
+                                if cursor < 3 and locked(2) = '0' and found = '0' then next_cursor := 3; found := '1'; end if;
+                                if cursor < 4 and locked(1) = '0' and found = '0' then next_cursor := 4; found := '1'; end if;
+                                if cursor < 5 and locked(0) = '0' and found = '0' then next_cursor := 5; found := '1'; end if;
+                                cursor <= next_cursor;
+
+                            end if;
+                        end if;
+                    end if;
+                end if;
+
+            end if;
+        end if;
+    end process;
+
+end Behavioral;

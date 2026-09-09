@@ -1,0 +1,154 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity keypad_scanner is
+    Port (
+        clk       : in  STD_LOGIC;
+        rst       : in  STD_LOGIC;
+        col_out   : out STD_LOGIC_VECTOR(3 downto 0);
+        row_in    : in  STD_LOGIC_VECTOR(3 downto 0);
+        key_code  : out STD_LOGIC_VECTOR(3 downto 0);
+        key_valid : out STD_LOGIC
+    );
+end keypad_scanner;
+
+architecture Behavioral of keypad_scanner is
+
+    constant SCAN_DIV : integer := 100000;
+    constant DEB_HITS : integer := 10;
+
+    signal scan_cnt : integer range 0 to SCAN_DIV-1 := 0;
+    signal tick     : STD_LOGIC := '0';
+    signal phase    : STD_LOGIC := '0';
+    signal col_sel  : integer range 0 to 3 := 0;
+    signal col_reg  : STD_LOGIC_VECTOR(3 downto 0) := "1110";
+    signal row_s1   : STD_LOGIC_VECTOR(3 downto 0) := "1111";
+    signal row_s2   : STD_LOGIC_VECTOR(3 downto 0) := "1111";
+    signal deb_cnt  : integer range 0 to DEB_HITS := 0;
+    signal deb_col  : integer range 0 to 3 := 0;
+    signal deb_row  : STD_LOGIC_VECTOR(3 downto 0) := "1111";
+    signal fired    : STD_LOGIC := '0';
+
+    function decode_key(col : integer; row : STD_LOGIC_VECTOR(3 downto 0))
+        return STD_LOGIC_VECTOR is
+    begin
+        case col is
+            when 0 =>
+                case row is
+                    when "1110" => return x"1";
+                    when "1101" => return x"4";
+                    when "1011" => return x"7";
+                    when "0111" => return x"0";
+                    when others => return x"F";
+                end case;
+            when 1 =>
+                case row is
+                    when "1110" => return x"2";
+                    when "1101" => return x"5";
+                    when "1011" => return x"8";
+                    when "0111" => return x"F";
+                    when others => return x"F";
+                end case;
+            when 2 =>
+                case row is
+                    when "1110" => return x"3";
+                    when "1101" => return x"6";
+                    when "1011" => return x"9";
+                    when "0111" => return x"E";
+                    when others => return x"F";
+                end case;
+            when others =>
+                case row is
+                    when "1110" => return x"A";
+                    when "1101" => return x"B";
+                    when "1011" => return x"C";
+                    when "0111" => return x"D";
+                    when others => return x"F";
+                end case;
+        end case;
+    end function;
+
+begin
+
+    col_out <= col_reg;
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            row_s1 <= row_in;
+            row_s2 <= row_s1;
+        end if;
+    end process;
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            tick <= '0';
+            if rst = '1' then
+                scan_cnt <= 0;
+            elsif scan_cnt = SCAN_DIV - 1 then
+                scan_cnt <= 0;
+                tick     <= '1';
+            else
+                scan_cnt <= scan_cnt + 1;
+            end if;
+        end if;
+    end process;
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            key_valid <= '0';
+
+            if rst = '1' then
+                phase   <= '0';
+                col_sel <= 0;
+                col_reg <= "1110";
+                deb_cnt <= 0;
+                deb_col <= 0;
+                deb_row <= "1111";
+                fired   <= '0';
+
+            elsif tick = '1' then
+                if phase = '0' then
+                    phase <= '1';
+                else
+                    phase <= '0';
+
+                    if row_s2 = "1111" then
+                        if col_sel = deb_col then
+                            deb_cnt <= 0;
+                            deb_row <= "1111";
+                            fired   <= '0';
+                        end if;
+                    else
+                        if col_sel = deb_col and row_s2 = deb_row then
+                            if deb_cnt < DEB_HITS then
+                                deb_cnt <= deb_cnt + 1;
+                            end if;
+                            if deb_cnt = DEB_HITS and fired = '0' then
+                                key_code  <= decode_key(col_sel, row_s2);
+                                key_valid <= '1';
+                                fired     <= '1';
+                            end if;
+                        else
+                            deb_col <= col_sel;
+                            deb_row <= row_s2;
+                            deb_cnt <= 1;
+                            fired   <= '0';
+                        end if;
+                    end if;
+
+                    case col_sel is
+                        when 0 => col_sel <= 1; col_reg <= "1101";
+                        when 1 => col_sel <= 2; col_reg <= "1011";
+                        when 2 => col_sel <= 3; col_reg <= "0111";
+                        when others => col_sel <= 0; col_reg <= "1110";
+                    end case;
+                end if;
+            end if;
+        end if;
+    end process;
+
+end Behavioral;

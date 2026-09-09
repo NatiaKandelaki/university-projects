@@ -1,0 +1,353 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity tft_display is
+    Port (
+        clk_100   : in  STD_LOGIC;
+        rst       : in  STD_LOGIC;
+        game_won  : in  STD_LOGIC;
+        game_lost : in  STD_LOGIC;
+        tft_clk   : out STD_LOGIC;
+        tft_de    : out STD_LOGIC;
+        tft_hs    : out STD_LOGIC;
+        tft_vs    : out STD_LOGIC;
+        tft_disp  : out STD_LOGIC;
+        tft_bklt  : out STD_LOGIC;
+        tft_vdden : out STD_LOGIC;
+        tft_r     : out STD_LOGIC_VECTOR(7 downto 0);
+        tft_g     : out STD_LOGIC_VECTOR(7 downto 0);
+        tft_b     : out STD_LOGIC_VECTOR(7 downto 0)
+    );
+end tft_display;
+
+architecture Behavioral of tft_display is
+
+    constant H_ACTIVE : integer := 480;
+    constant H_FRONT  : integer := 2;
+    constant H_SYNC   : integer := 41;
+    constant H_BACK   : integer := 2;
+    constant H_TOTAL  : integer := H_ACTIVE + H_FRONT + H_SYNC + H_BACK;
+
+    constant V_ACTIVE : integer := 272;
+    constant V_FRONT  : integer := 2;
+    constant V_SYNC   : integer := 10;
+    constant V_BACK   : integer := 2;
+    constant V_TOTAL  : integer := V_ACTIVE + V_FRONT + V_SYNC + V_BACK;
+
+    constant POWERUP_DELAY : integer := 10000000;
+    signal powerup_cnt  : integer range 0 to POWERUP_DELAY := 0;
+    signal disp_enable  : STD_LOGIC := '0';
+
+    signal tft_clk_en  : STD_LOGIC := '0';
+    signal tft_clk_int : STD_LOGIC := '0';
+    signal hcnt        : integer range 0 to H_TOTAL-1 := 0;
+    signal vcnt        : integer range 0 to V_TOTAL-1 := 0;
+    signal vde         : STD_LOGIC := '0';
+    signal hsync       : STD_LOGIC := '1';
+    signal vsync       : STD_LOGIC := '1';
+
+    constant CX     : integer := 240;
+    constant CY     : integer := 115;
+    constant FACE_R : integer := 85;   
+    constant FACE_I : integer := 77;   
+
+    constant EYE_R  : integer := 10;
+    constant LEY_X  : integer := 205;  
+    constant REY_X  : integer := 275;  
+    constant EYE_Y  : integer :=  95;  
+
+    constant SM_CY  : integer := CY + 10;  
+    constant SM_RO  : integer := 48;         
+    constant SM_RI  : integer := 40;        
+
+    constant FR_CY  : integer := CY + 65;
+    constant FR_RO  : integer := 48;
+    constant FR_RI  : integer := 40;
+
+    constant XEY_R  : integer := 12;
+
+    signal px : integer range 0 to H_ACTIVE-1 := 0;
+    signal py : integer range 0 to V_ACTIVE-1 := 0;
+
+    signal in_face_ring  : boolean;
+    signal in_face_fill  : boolean;
+    signal in_left_eye   : boolean;
+    signal in_right_eye  : boolean;
+    signal in_smile      : boolean;
+    signal in_frown      : boolean;
+    signal in_cross_l    : boolean;
+    signal in_cross_r    : boolean;
+
+    signal dx_f  : integer;
+    signal dy_f  : integer;
+    signal dx_le : integer;
+    signal dy_le : integer;
+    signal dx_re : integer;
+    signal dy_re : integer;
+    signal dx_sm : integer;  
+    signal dy_sm : integer; 
+    signal dx_fr : integer;
+    signal dy_fr : integer;
+
+    constant TEXT_Y     : integer := 215;
+    constant TEXT_X_WIN : integer := 168;
+    constant TEXT_X_LOS : integer := 160;
+
+    type char_bmp is array(0 to 11) of STD_LOGIC_VECTOR(7 downto 0);
+
+    constant GLYPH_W : char_bmp := (
+        x"82",x"82",x"82",x"82",x"92",x"AA",x"C6",x"82",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_E : char_bmp := (
+        x"FE",x"80",x"80",x"F8",x"80",x"80",x"FE",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_L : char_bmp := (
+        x"80",x"80",x"80",x"80",x"80",x"80",x"FE",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_SP : char_bmp := (
+        x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_D : char_bmp := (
+        x"F8",x"84",x"82",x"82",x"82",x"84",x"F8",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_O : char_bmp := (
+        x"7C",x"82",x"82",x"82",x"82",x"82",x"7C",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_N : char_bmp := (
+        x"82",x"C2",x"A2",x"92",x"8A",x"86",x"82",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_EX : char_bmp := (
+        x"10",x"10",x"10",x"10",x"10",x"00",x"10",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_G : char_bmp := (
+        x"7C",x"82",x"80",x"9E",x"82",x"82",x"7C",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_A : char_bmp := (
+        x"38",x"44",x"82",x"FE",x"82",x"82",x"82",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_M : char_bmp := (
+        x"82",x"C6",x"AA",x"92",x"82",x"82",x"82",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_V : char_bmp := (
+        x"82",x"82",x"82",x"44",x"44",x"28",x"10",x"00",
+        x"00",x"00",x"00",x"00");
+    constant GLYPH_R : char_bmp := (
+        x"F8",x"84",x"84",x"F8",x"90",x"88",x"84",x"00",
+        x"00",x"00",x"00",x"00");
+
+    type str10 is array(0 to 9)  of char_bmp;
+    type str9  is array(0 to 8)  of char_bmp;
+
+    constant WIN_STR : str10 := (
+        GLYPH_W,GLYPH_E,GLYPH_L,GLYPH_L,GLYPH_SP,
+        GLYPH_D,GLYPH_O,GLYPH_N,GLYPH_E,GLYPH_EX);
+    constant LOS_STR : str9 := (
+        GLYPH_G,GLYPH_A,GLYPH_M,GLYPH_E,GLYPH_SP,
+        GLYPH_O,GLYPH_V,GLYPH_E,GLYPH_R);
+
+    signal win_pixel : STD_LOGIC;
+    signal los_pixel : STD_LOGIC;
+
+begin
+
+    tft_vdden <= '1';
+    tft_disp  <= disp_enable;
+    tft_bklt  <= disp_enable;
+
+    process(clk_100)
+    begin
+        if rising_edge(clk_100) then
+            if rst = '1' then
+                powerup_cnt <= 0;
+                disp_enable <= '0';
+            elsif powerup_cnt < POWERUP_DELAY then
+                powerup_cnt <= powerup_cnt + 1;
+                disp_enable <= '0';
+            else
+                disp_enable <= '1';
+            end if;
+        end if;
+    end process;
+
+    process(clk_100)
+        variable cnt     : integer range 0 to 2 := 0;
+        variable clk_tog : STD_LOGIC := '0';
+    begin
+        if rising_edge(clk_100) then
+            if cnt = 2 then
+                cnt     := 0;
+                clk_tog := not clk_tog;
+            else
+                cnt := cnt + 1;
+            end if;
+            tft_clk_int <= clk_tog;
+            if cnt = 0 and clk_tog = '1' then
+                tft_clk_en <= '1';
+            else
+                tft_clk_en <= '0';
+            end if;
+        end if;
+    end process;
+
+    tft_clk <= tft_clk_int;
+
+    process(clk_100)
+    begin
+        if rising_edge(clk_100) then
+            if tft_clk_en = '1' then
+                if hcnt = H_TOTAL-1 then
+                    hcnt <= 0;
+                    if vcnt = V_TOTAL-1 then
+                        vcnt <= 0;
+                    else
+                        vcnt <= vcnt + 1;
+                    end if;
+                else
+                    hcnt <= hcnt + 1;
+                end if;
+            end if;
+        end if;
+    end process;
+
+    hsync <= '0' when (hcnt >= H_ACTIVE+H_FRONT and
+                       hcnt <  H_ACTIVE+H_FRONT+H_SYNC) else '1';
+    vsync <= '0' when (vcnt >= V_ACTIVE+V_FRONT and
+                       vcnt <  V_ACTIVE+V_FRONT+V_SYNC) else '1';
+    vde   <= '1' when (hcnt < H_ACTIVE and vcnt < V_ACTIVE) else '0';
+
+    tft_hs <= hsync;
+    tft_vs <= vsync;
+    tft_de <= vde;
+
+    px <= hcnt when hcnt < H_ACTIVE else 0;
+    py <= vcnt when vcnt < V_ACTIVE else 0;
+
+    dx_f  <= px - CX;
+    dy_f  <= py - CY;
+    dx_le <= px - LEY_X;
+    dy_le <= py - EYE_Y;
+    dx_re <= px - REY_X;
+    dy_re <= py - EYE_Y;
+    dx_sm <= px - CX;       
+    dy_sm <= py - SM_CY;
+    dx_fr <= px - CX;
+    dy_fr <= py - FR_CY;
+
+    in_face_ring <= (dx_f*dx_f + dy_f*dy_f <= FACE_R*FACE_R) and
+                    (dx_f*dx_f + dy_f*dy_f >  FACE_I*FACE_I);
+
+    in_face_fill <= (dx_f*dx_f + dy_f*dy_f <= FACE_I*FACE_I);
+
+    in_left_eye  <= (dx_le*dx_le + dy_le*dy_le <= EYE_R*EYE_R);
+    in_right_eye <= (dx_re*dx_re + dy_re*dy_re <= EYE_R*EYE_R);
+
+    in_smile <= (dx_sm*dx_sm + dy_sm*dy_sm <= SM_RO*SM_RO) and
+                (dx_sm*dx_sm + dy_sm*dy_sm >  SM_RI*SM_RI) and
+                (py > SM_CY);
+
+    in_frown <= (dx_fr*dx_fr + dy_fr*dy_fr <= FR_RO*FR_RO) and
+                (dx_fr*dx_fr + dy_fr*dy_fr >  FR_RI*FR_RI) and
+                (py < FR_CY);
+
+    in_cross_l <= ((abs(dx_le) = abs(dy_le) or
+                    abs(dx_le) = abs(dy_le)+1 or
+                    abs(dx_le)+1 = abs(dy_le)) and
+                   dx_le*dx_le + dy_le*dy_le <= XEY_R*XEY_R);
+    in_cross_r <= ((abs(dx_re) = abs(dy_re) or
+                    abs(dx_re) = abs(dy_re)+1 or
+                    abs(dx_re)+1 = abs(dy_re)) and
+                   dx_re*dx_re + dy_re*dy_re <= XEY_R*XEY_R);
+
+    process(px, py)
+        variable col    : integer;
+        variable row    : integer;
+        variable char_i : integer;
+        variable bit_i  : integer;
+        variable bmp    : char_bmp;
+    begin
+        win_pixel <= '0';
+        los_pixel <= '0';
+
+        if py >= TEXT_Y and py < TEXT_Y+14 and
+           px >= TEXT_X_WIN and px < TEXT_X_WIN+160 then
+            col    := (px - TEXT_X_WIN) / 2;
+            row    := (py - TEXT_Y)     / 2;
+            char_i := col / 8;
+            bit_i  := 7 - (col mod 8);
+            if char_i < 10 and row < 8 then
+                bmp := WIN_STR(char_i);
+                win_pixel <= bmp(row)(bit_i);
+            end if;
+        end if;
+
+        if py >= TEXT_Y and py < TEXT_Y+14 and
+           px >= TEXT_X_LOS and px < TEXT_X_LOS+144 then
+            col    := (px - TEXT_X_LOS) / 2;
+            row    := (py - TEXT_Y)     / 2;
+            char_i := col / 8;
+            bit_i  := 7 - (col mod 8);
+            if char_i < 9 and row < 8 then
+                bmp := LOS_STR(char_i);
+                los_pixel <= bmp(row)(bit_i);
+            end if;
+        end if;
+    end process;
+
+    process(clk_100)
+    begin
+        if rising_edge(clk_100) then
+            tft_r <= x"00";
+            tft_g <= x"00";
+            tft_b <= x"00";
+
+            if vde = '1' then
+
+                if game_won = '1' then
+                    tft_r <= x"00"; tft_g <= x"88"; tft_b <= x"00";
+                    if in_face_fill then
+                        tft_r <= x"FF"; tft_g <= x"DD"; tft_b <= x"00";
+                    end if;
+                    if in_face_ring then
+                        tft_r <= x"CC"; tft_g <= x"AA"; tft_b <= x"00";
+                    end if;
+                    if in_left_eye or in_right_eye then
+                        tft_r <= x"00"; tft_g <= x"00"; tft_b <= x"00";
+                    end if;
+                    if in_smile then
+                        tft_r <= x"00"; tft_g <= x"00"; tft_b <= x"00";
+                    end if;
+                    if win_pixel = '1' then
+                        tft_r <= x"FF"; tft_g <= x"FF"; tft_b <= x"FF";
+                    end if;
+
+                elsif game_lost = '1' then
+                    tft_r <= x"88"; tft_g <= x"00"; tft_b <= x"00";
+                    if in_face_fill then
+                        tft_r <= x"CC"; tft_g <= x"CC"; tft_b <= x"CC";
+                    end if;
+                    if in_face_ring then
+                        tft_r <= x"99"; tft_g <= x"99"; tft_b <= x"99";
+                    end if;
+                    if in_cross_l or in_cross_r then
+                        tft_r <= x"FF"; tft_g <= x"00"; tft_b <= x"00";
+                    end if;
+                    if in_frown then
+                        tft_r <= x"00"; tft_g <= x"00"; tft_b <= x"00";
+                    end if;
+                    if los_pixel = '1' then
+                        tft_r <= x"FF"; tft_g <= x"FF"; tft_b <= x"FF";
+                    end if;
+
+                else
+                    tft_r <= x"00"; tft_g <= x"00"; tft_b <= x"50";
+                    if hcnt < 3 or hcnt >= H_ACTIVE-3 or
+                       vcnt < 3 or vcnt >= V_ACTIVE-3 then
+                        tft_r <= x"FF"; tft_g <= x"FF"; tft_b <= x"FF";
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process;
+
+end Behavioral;
