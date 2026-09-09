@@ -20,15 +20,6 @@ The design is built entirely from op-amp comparators, avoiding the need for a mi
 Power Supply → Control Object (room sensors) → Buffer (Voltage Follower) → Comparators → LEDs
 ```
 
-## Block diagram
-
-```
-┌─────────────┐     ┌───────────────────┐     ┌────────────────────────────┐     ┌──────────────┐     ┌─────┐
-│ Power Supply │ --> │ Control Object     │ --> │ Control Operational        │ --> │ Comparator    │ --> │ LED │
-│              │     │ (room sensors)     │     │ Amplifier (buffer)         │     │               │     │     │
-└─────────────┘     └───────────────────┘     └────────────────────────────┘     └──────────────┘     └─────┘
-```
-
 ## Design notes
 
 - **Sensor network (R1–R4):** four resistors, each in parallel with a push-button, forming a voltage divider. Pressing a button produces a distinct voltage per room, simulating intrusion at that location. A fifth resistor (R5) represents the control room in the block diagram concept.
