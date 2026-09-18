@@ -78,7 +78,5 @@ R1–R4 (the room sensor resistors) were chosen so that the voltage produced by 
 ## References
 
 - [Texas Instruments — TL082 datasheet](https://www.ti.com/lit/ds/symlink/tl082-q1.pdf)
-- [Components101 — 5mm Round LED](https://components101.com/diodes/5mm-round-led)
-- [Components101 — Potentiometer](https://components101.com/resistors/potentiometer)
 
 
