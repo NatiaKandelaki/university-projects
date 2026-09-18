@@ -71,7 +71,7 @@ Coils were hand-wound using 25 AWG (0.45 mm) copper wire, ~6.69 cm diameter, 2.4
 
 ## References
 
-- [Number of turns of solenoid — formula calculator](http://www.wikicalculator.com/formula_calculator/Number-of-turns-of-solenoid-%28given-magnetic-permeability-inductance-area-length-of-coil%29-267.htm)
+
 - [Electronics Tutorials — Oscillators](https://www.electronics-tutorials.ws/oscillator/oscillators.html)
 - [ON Semiconductor — P2N2222A datasheet](https://www.onsemi.com/pdf/datasheet/p2n2222a-d.pdf)
 - [ON Semiconductor — SS8550 datasheet](https://www.onsemi.com/pdf/datasheet/ss8550-d.pdf)
