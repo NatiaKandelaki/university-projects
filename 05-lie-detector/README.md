@@ -124,3 +124,7 @@ Circuit runs at **7V** input, regulated down to **5V** via a 7805 regulator for 
 4. In MATLAB, update the serial port name (`COM4`) in the script to match your system, then run the script.
 5. Attach the PPG sensor to a fingertip, the GSR electrodes to two fingers (or palm), and the DS18B20 to the skin.
 6. Watch the four live plots update in real time; after the buffer window completes, check the console for the BPM/GSR/temperature summary.
+
+##  Keep in mind
+during this project i was using older version of MATLAB, version 9.6
+
