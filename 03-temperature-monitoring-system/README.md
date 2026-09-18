@@ -96,7 +96,6 @@ ADC = 1023 · Rdiv / (R + Rdiv)      // voltage divider → ADC reading
 ##  References
 
 1. [herbert-dingfelder.de](http://www.herbert-dingfelder.de/?page_id=568)
-2. [Engineering Fundamentals – An Introduction to Engineering (AIU)](https://students.aiu.edu/submissions/profiles/resources/onlineBook/M4K3T4_Engineering%20Fundamentals_%20An%20Introduction%20to%20Engineering,%20Fourth%20Edition%20(2010).pdf)
-3. [ATtiny13A Datasheet — Microchip](https://ww1.microchip.com/downloads/en/DeviceDoc/ATtiny13A-Data-SheetDS40002307A.pdf)
-4. [CD4094B Datasheet — TI](https://www.ti.com/lit/ds/symlink/cd4094b.pdf)
-5. [Farnell Datasheet](https://www.farnell.com/datasheets/95204.pdf)
+2. [ATtiny13A Datasheet — Microchip](https://ww1.microchip.com/downloads/en/DeviceDoc/ATtiny13A-Data-SheetDS40002307A.pdf)
+3. [CD4094B Datasheet — TI](https://www.ti.com/lit/ds/symlink/cd4094b.pdf)
+4. [Farnell Datasheet](https://www.farnell.com/datasheets/95204.pdf)
