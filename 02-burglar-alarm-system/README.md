@@ -1,6 +1,6 @@
 # Burglar Alarm System with Location Identification
 
-An analog intrusion-detection system built as a coursework project at the Georgian Agrarian University, Faculty of Engineering and Technology.
+An analog intrusion-detection system built as a coursework project at the Georgian agricultural University, Faculty of Engineering and Technology.
 
 The system monitors 4 independent "rooms" over a single control wire and identifies which room has been breached using a dedicated colored LED per zone — without requiring any digital logic.
 
