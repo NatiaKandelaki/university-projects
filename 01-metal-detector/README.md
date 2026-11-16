@@ -1,6 +1,6 @@
 # Metal Detector
 
-A BFO-principle (beat-frequency oscillator) metal detector built as a coursework project at the Georgian Agrarian University, Faculty of Engineering and Technology.
+A BFO-principle (beat-frequency oscillator) metal detector built as a coursework project at the Georgian agricultural University, Faculty of Engineering and Technology.
 
 The circuit detects nearby ferrous metal objects and signals their presence through a buzzer, using two coils to generate and sense changes in a magnetic field.
 
